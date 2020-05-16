@@ -1,67 +1,206 @@
 import Head from 'next/head'
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router'
 
-export default function Home() {
+
+export default function Home(props) {
+  const router = useRouter()
+  const [series, setSeries] = useState([])
+  const [lastCheck, setLastCheck] = useState({
+    status: 'checking',
+    duration: '500',
+    time: '09:41:00 AM'
+  })
+  const [exampleUrl, setExampleUrl] = useState('')
+
+  let statusCodeToColor = (status) => {
+    const color = status >= 500 ? '#d62728' // orange
+                : status >= 400 ? '#d62728' // red
+                : status >= 300 ? '#1f77b4' // blue
+                : status >= 200 ? '#2ca02c' // green
+                : '#666666'
+    return color;
+  }
+
+  let timer = () => setInterval(async () => {
+    const res = await fetch(`/api/check?url=${router.query.url}`)
+    const body = await res.json()
+    const color = statusCodeToColor(body.status)
+    const time = new Date(body.timestamp).toLocaleTimeString('en-US')
+
+    const lastCheck = {
+      key: body.timestamp,
+      status: body.status,
+      duration: body.duration,
+      time: time,
+      color: color
+    }
+    setLastCheck(lastCheck)
+    setSeries([lastCheck].concat(series));
+  }, 5000)
+
+  useEffect(() => {
+    
+    if (router.query.url === undefined) {
+      setExampleUrl(`${window.location.protocol}//${window.location.host}/?url=https://vercel.com`)
+
+      return
+    }
+
+    let timerID = timer()
+
+    return () => {
+      clearInterval(timerID)
+    }
+  });
+
   return (
     <div className="container">
       <Head>
-        <title>Create Next App</title>
+        <title>Check your website</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <main>
-        <h1 className="title">
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className="description">
-          Get started by editing <code>pages/index.js</code>
-        </p>
-
-        <div className="grid">
-          <a href="https://nextjs.org/docs" className="card">
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className="card">
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/zeit/next.js/tree/master/examples"
-            className="card"
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className="card"
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
+      {(router.query.url === undefined)?
+        <>
+          <h1 className="title">
+            Missing <code>url</code> parameter.
+          </h1>
+          <h3>
+            Try with <a href={exampleUrl}>{exampleUrl}</a>
+          </h3>
+        </>
+      :
+        <>
+          <h1 className="title">
+            Checking <a href={router.query.url}>{router.query.url}</a> <span className="interval">every 5 seconds</span>
+          </h1>
+          <div href="https://nextjs.org/learn" className={`card ${lastCheck.status === 'checking'? 'is-loading': ''}`} style={{color: lastCheck.color, borderColor: lastCheck.color}}>
+            <h3>Last check</h3>
+            <p>Status: {lastCheck.status}</p>
+            <p>Duration: {lastCheck.duration}ms</p>
+            <p>Time: {lastCheck.time}</p>
+          </div>
+          <h3>History</h3>
+          <div className="grid">
+            {series.map(check => (
+              <div className="ping" key={check.key} style={{backgroundColor: check.color}}>
+                <div className="tooltiptext">
+                  Status: {check.status}<br/>
+                  Duration: {check.duration}ms<br/>
+                  Time: {check.time}<br/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      }
       </main>
-
-      <footer>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className="logo" />
-        </a>
-      </footer>
-
       <style jsx>{`
+        .card {
+          margin: 1.5rem 0;
+          flex-basis: 45%;
+          padding: 1rem 1rem;
+          text-align: left;
+          color: inherit;
+          text-decoration: none;
+          border: 1px solid #eaeaea;
+          border-radius: 10px;
+          transition: color 0.15s ease, border-color 0.15s ease;
+          max-width 300px;
+        }
+
+        h3 {
+          margin: 0 0 1rem 0;
+          font-size: 1.3rem;
+        }
+
+        .card p {
+          margin: 0;
+          margin-bottom: 2px;
+          font-size: 1rem;
+          line-height: 1.5;
+          position: relative;
+        }
+        .card.is-loading p {
+          overflow: hidden;
+        }
+        .card.is-loading p::after {
+          content: ' ';
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          background-color: lightgray;
+          border-radius: 2px;
+        }
+        .card.is-loading p::before {
+          content: '';
+          display: block;
+          position: absolute;
+          left: -150px;
+          top: 0;
+          height: 100%;
+          width: 150px;
+          background: linear-gradient(to right, transparent 0%, #E8E8E8 50%, transparent 100%);
+          animation: load 2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+          z-index: 10;
+        }
+
+        @keyframes load {
+          from {
+            left: -150px;
+          }
+          to   {
+            left: 100%;
+          }
+        }
+
+        .logo {
+          height: 1em;
+        }
+
+        .ping {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          margin: 0 1px 3px 2px;
+          position: relative;
+        }
+        .ping .tooltiptext {
+          visibility: hidden;
+          background-color: black;
+          color: #fff;
+          text-align: left;
+          width: 160px;
+          border-radius: 6px;
+          padding: 12px;
+          position: absolute;
+          z-index: 1;
+          top: 150%;
+          left: 50%;
+          margin-left: -80px;
+          font-size: 0.8em;
+        }
+
+        .ping .tooltiptext::after {
+          content: "";
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          margin-left: -5px;
+          border-width: 5px;
+          border-style: solid;
+          border-color: transparent transparent black transparent;
+        }
+
+        .ping:hover .tooltiptext {
+          visibility: visible;
+        }
+
         .container {
-          min-height: 100vh;
           padding: 0 0.5rem;
           display: flex;
           flex-direction: column;
@@ -70,69 +209,48 @@ export default function Home() {
         }
 
         main {
-          padding: 5rem 0;
+          padding: 2.5rem 0;
           flex: 1;
           display: flex;
           flex-direction: column;
-          justify-content: center;
-          align-items: center;
-        }
-
-        footer {
-          width: 100%;
-          height: 100px;
-          border-top: 1px solid #eaeaea;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        footer img {
-          margin-left: 0.5rem;
-        }
-
-        footer a {
-          display: flex;
-          justify-content: center;
-          align-items: center;
+          width: 600px;
+          margin: 0 auto;
         }
 
         a {
-          color: inherit;
-          text-decoration: none;
-        }
-
-        .title a {
           color: #0070f3;
           text-decoration: none;
         }
 
-        .title a:hover,
-        .title a:focus,
-        .title a:active {
+        a:hover,
+        a:focus,
+        a:active {
           text-decoration: underline;
         }
 
         .title {
           margin: 0;
           line-height: 1.15;
-          font-size: 4rem;
+          font-size: 1.5rem;
         }
 
         .title,
         .description {
-          text-align: center;
+          text-align: left;
         }
 
-        .description {
-          line-height: 1.5;
-          font-size: 1.5rem;
+        .interval {
+          font-size: 0.7em;
+          font-weight: normal;
+          color: gray;
         }
 
         code {
           background: #fafafa;
           border-radius: 5px;
-          padding: 0.75rem;
+          padding: 0.55rem;
+          display: inline-block;
+          margin-bottom: 0.5rem;
           font-size: 1.1rem;
           font-family: Menlo, Monaco, Lucida Console, Liberation Mono,
             DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
@@ -140,52 +258,12 @@ export default function Home() {
 
         .grid {
           display: flex;
-          align-items: center;
-          justify-content: center;
           flex-wrap: wrap;
-
-          max-width: 800px;
-          margin-top: 3rem;
-        }
-
-        .card {
-          margin: 1rem;
-          flex-basis: 45%;
-          padding: 1.5rem;
-          text-align: left;
-          color: inherit;
-          text-decoration: none;
-          border: 1px solid #eaeaea;
-          border-radius: 10px;
-          transition: color 0.15s ease, border-color 0.15s ease;
-        }
-
-        .card:hover,
-        .card:focus,
-        .card:active {
-          color: #0070f3;
-          border-color: #0070f3;
-        }
-
-        .card h3 {
-          margin: 0 0 1rem 0;
-          font-size: 1.5rem;
-        }
-
-        .card p {
-          margin: 0;
-          font-size: 1.25rem;
-          line-height: 1.5;
-        }
-
-        .logo {
-          height: 1em;
         }
 
         @media (max-width: 600px) {
-          .grid {
+          main {
             width: 100%;
-            flex-direction: column;
           }
         }
       `}</style>
